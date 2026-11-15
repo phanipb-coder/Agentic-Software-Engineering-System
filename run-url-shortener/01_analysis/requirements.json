@@ -1,0 +1,15 @@
+{
+  "mode": "greenfield",
+  "clarity": "partial",
+  "requirements": [
+    {"id":"REQ-1","priority":"must","statement":"Create a short link for a valid absolute HTTP/HTTPS URL.","acceptance_criteria":[{"id":"AC-1.1","given":"A valid HTTPS URL is submitted","when":"POST /api/v1/links is called","then":"The service returns 201 with a non-empty short code and destination"},{"id":"AC-1.2","given":"A malformed or non-HTTP URL is submitted","when":"The create endpoint is called","then":"The service returns 400 ProblemDetails"}]},
+    {"id":"REQ-2","priority":"must","statement":"Redirect a valid short code to its destination.","acceptance_criteria":[{"id":"AC-2.1","given":"An active short code exists","when":"GET /{code} is called","then":"The service returns a redirect to the original URL and records a click"},{"id":"AC-2.2","given":"A code does not exist","when":"GET /{code} is called","then":"The service returns 404 ProblemDetails"}]},
+    {"id":"REQ-3","priority":"must","statement":"Persist links and click events across restarts.","acceptance_criteria":[{"id":"AC-3.1","given":"A link and click have been recorded","when":"The application restarts and reads its store","then":"The link and analytics are still available"}]},
+    {"id":"REQ-4","priority":"must","statement":"Return click and unique visitor analytics.","acceptance_criteria":[{"id":"AC-4.1","given":"A link has received clicks","when":"GET /api/v1/links/{code}/analytics is called","then":"The response contains total clicks, unique visitors, and recent events"}]},
+    {"id":"REQ-5","priority":"must","statement":"Reject duplicate aliases and malformed requests with problem details.","acceptance_criteria":[{"id":"AC-5.1","given":"An alias is already used","when":"The same alias is created","then":"The service returns 409 ProblemDetails"}]},
+    {"id":"REQ-6","priority":"should","statement":"Support expiration.","acceptance_criteria":[{"id":"AC-6.1","given":"A link is expired","when":"The short code is requested","then":"The service returns 410 ProblemDetails"}]}
+  ],
+  "nfrs":[{"id":"NFR-1","target":"redirect p95 < 100ms single-node","verification":"performance smoke test"},{"id":"NFR-2","target":"stateless API instances","verification":"repository abstraction and deployment review"},{"id":"NFR-3","target":"async cancellation-aware public paths","verification":"code review and build"}],
+  "out_of_scope":["authentication","billing","multi-region replication","QR codes","custom domains","real-time dashboards"],
+  "assumptions":["ASSUMPTION-1: aliases are 3-32 URL-safe characters","ASSUMPTION-2: analytics identify visitors using a one-way SHA-256 hash of IP plus user-agent and do not persist raw IP","ASSUMPTION-3: local JSON storage is for demonstration; production uses a transactional database and cache"]
+}
