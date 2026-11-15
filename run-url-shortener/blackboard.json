@@ -1,0 +1,12 @@
+{
+  "mode":"greenfield",
+  "autonomy":"L2",
+  "contracts_version":"v1",
+  "schema_version":"json-v1",
+  "gate_status":{"HG-1":"approved","HG-2":"approved","HG-3":"not-raised","HG-4":"approved"},
+  "tasks":{"T-1":{"status":"done","artifacts":["01_analysis"],"attempts":1},"T-2":{"status":"done","artifacts":["02_codebase","03_plan"],"attempts":1},"T-3":{"status":"done","artifacts":["04_build/src"],"attempts":1},"T-4":{"status":"done","artifacts":["04_build/src/Shortener.Api"],"attempts":1},"T-5":{"status":"done","artifacts":["04_build/tests","04_build/docs"],"attempts":1},"T-6":{"status":"done","artifacts":["05_validate/validation_report.md","05_validate/validation.json"],"attempts":1}},
+  "events":[{"event":"greenfield.scaffolded","task_id":"T-1"},{"event":"contract.created","task_id":"T-2"},{"event":"implementation.created","task_id":"T-3"},{"event":"validation.completed","task_id":"T-6","detail":"5 tests passed; format passed; solution build passed with documented MSB4121 warning"},{"event":"approval.human.signoff","task_id":"T-1","detail":"HG-1 approved"},{"event":"approval.human.signoff","task_id":"T-2","detail":"HG-2 approved"},{"event":"approval.human.release","task_id":"T-6","detail":"HG-4 approved"}],
+  "open_issues":[],
+  "assumptions":["JSON persistence is demo-only","Production uses SQL Server + Redis","Management APIs use X-Api-Key or JWT bearer"],
+  "budgets":{"replans_used":0,"max_replans":2}
+}

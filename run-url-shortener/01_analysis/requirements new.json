@@ -1,0 +1,210 @@
+{
+  "title": "Scalable URL Shortener Service",
+  "source": "Build a scalable URL shortener service with APIs, persistence, and analytics.",
+  "mode": "greenfield",
+  "secondary_modes": [],
+  "clarity": "partial",
+  "summary": "A .NET 8 URL shortener that converts long URLs into short codes, redirects visitors with low latency, persists mappings and click events, and exposes owner-facing analytics through versioned REST APIs. The workload is read-heavy (redirects far outnumber creates).",
+  "stack": {
+    "ide": "Visual Studio 2022 (17.8+)",
+    "language": "C#",
+    "runtime": ".NET 8 LTS",
+    "framework": "ASP.NET Core Web API",
+    "persistence": "EF Core + SQL Server (Azure SQL in production)",
+    "cache": "Redis",
+    "messaging": "System.Threading.Channels (local), Azure Service Bus (production option)",
+    "testing": ["xUnit", "FluentAssertions", "Moq/NSubstitute", "WebApplicationFactory", "Testcontainers"]
+  },
+  "requirements": [
+    {
+      "id": "REQ-1",
+      "type": "functional",
+      "title": "Create short URL",
+      "statement": "Clients can create a short URL for a valid long URL.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-1.1", "given": "a valid http/https URL", "when": "POST /api/v1/urls is called", "then": "201 Created is returned with shortCode, shortUrl, originalUrl, createdAt, expiresAt"},
+        {"id": "AC-1.2", "given": "an invalid or malformed URL, or a scheme other than http/https", "when": "POST /api/v1/urls is called", "then": "400 is returned with a ProblemDetails body"},
+        {"id": "AC-1.3", "given": "a URL without a custom alias", "when": "a short code is generated", "then": "the code is unique, 7 characters long and Base62 encoded"},
+        {"id": "AC-1.4", "given": "a repeat request with the same Idempotency-Key", "when": "POST /api/v1/urls is called", "then": "the original result is returned and no duplicate is created"}
+      ]
+    },
+    {
+      "id": "REQ-2",
+      "type": "functional",
+      "title": "Custom alias",
+      "statement": "Clients can request a custom alias as the short code.",
+      "priority": "should",
+      "acceptance_criteria": [
+        {"id": "AC-2.1", "given": "an available, valid alias (3-30 chars, [A-Za-z0-9-])", "when": "a URL is created with that alias", "then": "the alias is used as the short code"},
+        {"id": "AC-2.2", "given": "an alias that is already taken, or a reserved word (api, admin, health, swagger)", "when": "a URL is created with that alias", "then": "409 Conflict is returned for a taken alias, 400 for a reserved word"}
+      ]
+    },
+    {
+      "id": "REQ-3",
+      "type": "functional",
+      "title": "Redirect",
+      "statement": "Visitors are redirected from a short code to the original URL.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-3.1", "given": "an active short code", "when": "GET /{code} is called", "then": "302 Found is returned with Location set to the original URL"},
+        {"id": "AC-3.2", "given": "an unknown, expired or disabled code", "when": "GET /{code} is called", "then": "404 is returned for an unknown code, 410 Gone for an expired or disabled one"},
+        {"id": "AC-3.3", "given": "any successful redirect", "when": "the redirect is served", "then": "a click event is recorded asynchronously without blocking the response"}
+      ]
+    },
+    {
+      "id": "REQ-4",
+      "type": "functional",
+      "title": "Expiry",
+      "statement": "Short URLs can have an optional expiry time.",
+      "priority": "should",
+      "acceptance_criteria": [
+        {"id": "AC-4.1", "given": "an expiresAt value that is not a future UTC timestamp", "when": "a URL is created or updated", "then": "400 is returned"},
+        {"id": "AC-4.2", "given": "a URL whose expiresAt has passed", "when": "GET /{code} is called", "then": "410 Gone is returned"}
+      ]
+    },
+    {
+      "id": "REQ-5",
+      "type": "functional",
+      "title": "Manage URLs",
+      "statement": "Owners can view, list, update and delete their short URLs.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-5.1", "given": "an existing URL owned by the caller", "when": "GET /api/v1/urls/{code} is called", "then": "the URL metadata is returned"},
+        {"id": "AC-5.2", "given": "an authenticated caller", "when": "GET /api/v1/urls?page=&pageSize= is called", "then": "a paginated list of the caller's URLs is returned"},
+        {"id": "AC-5.3", "given": "an owned URL", "when": "PATCH updates expiresAt/isActive, or DELETE is called", "then": "the changes are saved; a deleted URL is soft-deleted and its redirect returns 410"},
+        {"id": "AC-5.4", "given": "a URL owned by someone else", "when": "the caller tries to read or modify it", "then": "403 Forbidden is returned"}
+      ]
+    },
+    {
+      "id": "REQ-6",
+      "type": "functional",
+      "title": "Analytics",
+      "statement": "Owners can view click analytics for their short URLs.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-6.1", "given": "a redirect occurs", "when": "the click is recorded", "then": "timestamp, code, referrer, device, browser, OS and country are stored, and the IP is hashed or anonymized, never stored raw"},
+        {"id": "AC-6.2", "given": "an owned URL with clicks", "when": "GET /api/v1/urls/{code}/analytics?from=&to=&granularity=hour|day is called", "then": "total clicks, unique clicks and a time series are returned"},
+        {"id": "AC-6.3", "given": "an owned URL with clicks", "when": "analytics are requested", "then": "top-N breakdowns by referrer, country, device and browser are included"},
+        {"id": "AC-6.4", "given": "a new click", "when": "analytics are queried", "then": "the click appears within 60 seconds (eventual consistency)"}
+      ]
+    },
+    {
+      "id": "REQ-7",
+      "type": "functional",
+      "title": "Authentication",
+      "statement": "Management and analytics APIs are protected; redirects are public.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-7.1", "given": "a request without a valid X-Api-Key or JWT bearer token", "when": "a management or analytics API is called", "then": "401 Unauthorized is returned"},
+        {"id": "AC-7.2", "given": "an anonymous visitor", "when": "GET /{code} is called", "then": "the redirect works without authentication"}
+      ]
+    },
+    {
+      "id": "REQ-8",
+      "type": "functional",
+      "title": "Rate limiting and abuse protection",
+      "statement": "The service limits abuse of URL creation and of redirect targets.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-8.1", "given": "an API key that has exceeded the create rate limit (default 100 per minute)", "when": "POST /api/v1/urls is called", "then": "429 Too Many Requests is returned with a Retry-After header"},
+        {"id": "AC-8.2", "given": "a destination URL on the configurable domain blocklist", "when": "a URL is created", "then": "400 is returned"},
+        {"id": "AC-8.3", "given": "a destination URL that points to the service's own domain", "when": "a URL is created", "then": "400 is returned, preventing redirect loops"}
+      ]
+    },
+    {
+      "id": "REQ-9",
+      "type": "functional",
+      "title": "Observability and health",
+      "statement": "The service exposes health checks, structured logs and metrics.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-9.1", "given": "the service is running", "when": "/health/live and /health/ready are called", "then": "liveness is reported, and readiness reflects the database and cache status"},
+        {"id": "AC-9.2", "given": "any request", "when": "it is processed", "then": "structured Serilog logs are written with a correlation ID"},
+        {"id": "AC-9.3", "given": "the service is running", "when": "metrics are scraped", "then": "OpenTelemetry metrics for request count, request latency and cache hit ratio are available"}
+      ]
+    },
+    {
+      "id": "REQ-10",
+      "type": "functional",
+      "title": "API documentation and versioning",
+      "statement": "All APIs are documented and versioned.",
+      "priority": "must",
+      "acceptance_criteria": [
+        {"id": "AC-10.1", "given": "the service is running", "when": "Swagger UI or openapi.yaml is opened", "then": "every endpoint is documented with its request/response schemas and error codes"},
+        {"id": "AC-10.2", "given": "any management API", "when": "it is called", "then": "it is served under the /api/v1 prefix"}
+      ]
+    }
+  ],
+  "nfrs": [
+    {"id": "NFR-1", "category": "performance", "statement": "Redirect p95 < 50 ms on a cache hit and < 150 ms on a miss; create p95 < 200 ms", "verification": "load test (k6 or NBomber)"},
+    {"id": "NFR-2", "category": "scalability", "statement": "Stateless, horizontally scalable API; designed for ~1,000 redirects/sec and ~100 creates/sec (read:write ~100:1)", "verification": "load test and design review"},
+    {"id": "NFR-3", "category": "availability", "statement": "99.9% target for redirects; redirects keep working if the analytics pipeline is down", "verification": "integration test with the analytics worker stopped"},
+    {"id": "NFR-4", "category": "durability", "statement": "No mapping is lost once 201 has been returned; click events are delivered at least once", "verification": "integration tests and design review"},
+    {"id": "NFR-5", "category": "storage", "statement": "Supports 100M+ URLs; raw clicks kept for 90 days, aggregates kept indefinitely", "verification": "schema and index review; retention job test"},
+    {"id": "NFR-6", "category": "security", "statement": "OWASP Top 10 mitigated; HTTPS only; input validated; no secrets in code", "verification": "security scan and code review"},
+    {"id": "NFR-7", "category": "privacy", "statement": "IP addresses anonymized; GDPR-friendly retention", "verification": "unit test on click recording; schema review"},
+    {"id": "NFR-8", "category": "maintainability", "statement": "Clean Architecture; >= 80% line coverage on Domain and Application; no analyzer warnings", "verification": "coverlet report; dotnet build with analyzers"},
+    {"id": "NFR-9", "category": "deployability", "statement": "Dockerfile and docker-compose (API, Worker, SQL Server, Redis); config via appsettings and environment variables", "verification": "docker compose up smoke test"}
+  ],
+  "constraints": [
+    "Visual Studio 2022 .sln, C# on .NET 8 LTS",
+    "EF Core with SQL Server; Redis read-through cache",
+    "Asynchronous click ingestion via a background queue and a Worker service",
+    "Clean Architecture project layout"
+  ],
+  "api_summary": [
+    {"method": "POST", "path": "/api/v1/urls", "auth": "api-key", "purpose": "Create short URL", "requirement_ids": ["REQ-1", "REQ-2", "REQ-4", "REQ-8"]},
+    {"method": "GET", "path": "/api/v1/urls", "auth": "api-key", "purpose": "List own URLs", "requirement_ids": ["REQ-5"]},
+    {"method": "GET", "path": "/api/v1/urls/{code}", "auth": "api-key", "purpose": "Get URL metadata", "requirement_ids": ["REQ-5"]},
+    {"method": "PATCH", "path": "/api/v1/urls/{code}", "auth": "api-key", "purpose": "Update expiry/active status", "requirement_ids": ["REQ-4", "REQ-5"]},
+    {"method": "DELETE", "path": "/api/v1/urls/{code}", "auth": "api-key", "purpose": "Soft delete", "requirement_ids": ["REQ-5"]},
+    {"method": "GET", "path": "/api/v1/urls/{code}/analytics", "auth": "api-key", "purpose": "Click analytics", "requirement_ids": ["REQ-6"]},
+    {"method": "GET", "path": "/{code}", "auth": "public", "purpose": "Redirect", "requirement_ids": ["REQ-3", "REQ-6"]},
+    {"method": "GET", "path": "/health/live", "auth": "public", "purpose": "Liveness", "requirement_ids": ["REQ-9"]},
+    {"method": "GET", "path": "/health/ready", "auth": "public", "purpose": "Readiness", "requirement_ids": ["REQ-9"]}
+  ],
+  "data_model": [
+    {"entity": "ShortUrl", "fields": ["Id", "ShortCode (unique index)", "OriginalUrl", "OwnerId", "IsCustomAlias", "CreatedAt", "ExpiresAt", "IsActive", "IsDeleted"]},
+    {"entity": "ApiKey", "fields": ["Id", "OwnerId", "KeyHash", "Name", "CreatedAt", "RevokedAt"]},
+    {"entity": "ClickEvent", "fields": ["Id", "ShortCode", "OccurredAt", "Referrer", "Country", "Device", "Browser", "Os", "VisitorHash"]},
+    {"entity": "ClickAggregate", "fields": ["ShortCode", "BucketStart", "Granularity", "TotalClicks", "UniqueClicks"]}
+  ],
+  "expected_outputs": [
+    "Solution: UrlShortener.Api, .Application, .Domain, .Infrastructure, .Worker, .UnitTests, .IntegrationTests",
+    "openapi.yaml",
+    "EF Core migrations with Up/Down",
+    "README (Visual Studio, CLI, docker-compose)",
+    "ADRs: short-code generation, cache strategy, analytics pipeline",
+    "Sequence diagrams: create and redirect",
+    "Risk register and test strategy",
+    "Load test script (k6 or NBomber)"
+  ],
+  "out_of_scope": [
+    "Web UI / dashboard",
+    "QR code generation",
+    "Bulk import",
+    "Branded custom domains",
+    "Billing",
+    "Full user registration",
+    "Malware scanning beyond the domain blocklist"
+  ],
+  "assumptions": [
+    {"id": "ASSUMPTION-1", "question": "Should redirects use 301 or 302?", "text": "Use 302 so every click reaches the server and can be counted", "status": "assumed"},
+    {"id": "ASSUMPTION-2", "question": "How are short codes generated?", "text": "Random Base62 with a retry on collision; a counter- or Snowflake-based scheme is documented as an alternative", "status": "assumed"},
+    {"id": "ASSUMPTION-3", "question": "Does the same long URL always get the same code?", "text": "No; each request gets a new code unless the Idempotency-Key matches", "status": "assumed"},
+    {"id": "ASSUMPTION-4", "question": "How is 'scalable' verified?", "text": "Against the NFR-2 targets with a local load test; no cloud deployment", "status": "assumed"},
+    {"id": "ASSUMPTION-5", "question": "Can anonymous users create links?", "text": "No; creating a link requires an API key", "status": "assumed"},
+    {"id": "ASSUMPTION-6", "question": "Where does country data come from?", "text": "A pluggable IGeoLocator with a stub implementation; a MaxMind database is optional", "status": "assumed"},
+    {"id": "ASSUMPTION-7", "question": "What counts as a 'unique click'?", "text": "A distinct hash of IP + user agent per day", "status": "assumed"},
+    {"id": "ASSUMPTION-8", "question": "Is a UI required?", "text": "No; the service is API-only, with Swagger UI", "status": "assumed"}
+  ],
+  "risks": [
+    {"id": "R-1", "risk": "Cache stampede or stale entries after a URL is deleted or expires", "likelihood": "medium", "impact": "medium", "mitigation": "Cache TTL <= expiry; invalidate on update; single-flight loading"},
+    {"id": "R-2", "risk": "Very popular codes overloading the database", "likelihood": "medium", "impact": "high", "mitigation": "Redis cache plus in-memory LRU; read replicas"},
+    {"id": "R-3", "risk": "Click events lost if the queue or worker crashes", "likelihood": "medium", "impact": "medium", "mitigation": "Durable queue (Service Bus) or outbox; at-least-once delivery with idempotent aggregation"},
+    {"id": "R-4", "risk": "Short-code collisions as volume grows", "likelihood": "low", "impact": "high", "mitigation": "Unique index plus retry; monitor the collision rate; option to extend code length"},
+    {"id": "R-5", "risk": "Open-redirect or phishing abuse", "likelihood": "medium", "impact": "high", "mitigation": "Domain blocklist, rate limits, ability to disable a code"},
+    {"id": "R-6", "risk": "Unbounded growth of the ClickEvents table", "likelihood": "high", "impact": "medium", "mitigation": "Retention job, aggregation, table partitioning"}
+  ]
+}
