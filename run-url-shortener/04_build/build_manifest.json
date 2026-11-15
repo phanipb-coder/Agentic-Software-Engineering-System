@@ -1,1 +1,0 @@
-{"solution":"Shortener.sln","target_framework":"net8.0","projects":[{"path":"src/Shortener.Api/Shortener.Api.csproj","type":"web-api"},{"path":"tests/Shortener.Tests/Shortener.Tests.csproj","type":"xunit"}],"endpoints":["POST /api/v1/links","GET /{code}","GET /api/v1/links/{code}/analytics","GET /health"],"persistence":"JsonFilePersistenceStore","status":"generated"}

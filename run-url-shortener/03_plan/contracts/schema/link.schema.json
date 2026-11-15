@@ -1,1 +1,0 @@
-{"$schema":"https://json-schema.org/draft/2020-12/schema","title":"ShortLink","type":"object","required":["code","url","createdAt"],"properties":{"code":{"type":"string"},"url":{"type":"string","format":"uri"},"createdAt":{"type":"string","format":"date-time"},"expiresAt":{"type":["string","null"],"format":"date-time"}}}

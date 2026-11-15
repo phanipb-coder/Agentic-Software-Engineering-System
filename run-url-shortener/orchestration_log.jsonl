@@ -1,3 +1,0 @@
-{"ts":"generated","wave":1,"task_id":"T-1","agent":"Requirements Analyst","event":"requirements.normalized","attempt":1,"detail":"Created problem statement, requirements, assumptions, and acceptance criteria."}
-{"ts":"generated","wave":2,"task_id":"T-2","agent":"Architect","event":"contracts.created","attempt":1,"detail":"Created architecture map, design, OpenAPI, schema, DAG, risks, and test strategy."}
-{"ts":"generated","wave":3,"task_id":"T-3","agent":"Developer","event":"implementation.created","attempt":1,"detail":"Created .NET 8 API, JSON persistence, redirect workflow, and analytics."}
