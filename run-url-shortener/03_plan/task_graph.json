@@ -1,0 +1,12 @@
+{
+  "tasks":[
+    {"id":"T-1","name":"Normalize requirements","depends_on":[],"produces":["requirements.json"],"status":"done"},
+    {"id":"T-2","name":"Design architecture and contracts","depends_on":["T-1"],"produces":["design.md","openapi.yaml","schema"],"status":"done"},
+    {"id":"T-3","name":"Implement domain and persistence","depends_on":["T-2"],"produces":["Shortener.Api"],"status":"done"},
+    {"id":"T-4","name":"Implement HTTP endpoints","depends_on":["T-2","T-3"],"produces":["API"],"status":"done"},
+    {"id":"T-5","name":"Add tests and documentation","depends_on":["T-4"],"produces":["tests","README"],"status":"done"},
+    {"id":"T-6","name":"Validate build and tests","depends_on":["T-5"],"produces":["validation_report.md"],"status":"pending"}
+  ],
+  "waves":[["T-1"],["T-2"],["T-3"],["T-4"],["T-5"],["T-6"]],
+  "critical_path":["T-1","T-2","T-3","T-4","T-5","T-6"]
+}
