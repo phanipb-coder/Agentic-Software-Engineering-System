@@ -1,0 +1,12 @@
+{
+  "mode":"greenfield",
+  "entry_points":["POST /api/v1/links","GET /{code}","GET /api/v1/links/{code}/analytics","GET /health"],
+  "services":[{"name":"Shortener.Api","impact":"add","reason":"new HTTP API and composition root"}],
+  "modules":[{"project":"Shortener.Api","types":["ShortenerService","JsonFilePersistenceStore","LinkEndpoints"],"impact":"add"}],
+  "apis":[{"endpoint":"POST /api/v1/links","change":"additive","consumers":[]},{"endpoint":"GET /{code}","change":"additive","consumers":[]},{"endpoint":"GET /api/v1/links/{code}/analytics","change":"additive","consumers":[]}],
+  "data":[{"entity":"ShortLink","table":"links.json","change":"create document store","migration":false},{"entity":"ClickEvent","table":"clicks.json","change":"create document store","migration":false}],
+  "data_flows":[{"name":"Create link","path":["Endpoint","ShortenerService","IPersistenceStore","JsonFilePersistenceStore","links.json"]},{"name":"Redirect and analytics","path":["Endpoint","ShortenerService","IPersistenceStore","JsonFilePersistenceStore","clicks.json","Redirect response"]}],
+  "callers_and_dependents":[],
+  "files_allowed_to_change":["run-url-shortener/**"],
+  "risk_hotspots":["file store write contention","short-code collision","visitor fingerprint privacy","provider replacement for production scale"]
+}
